@@ -1,0 +1,47 @@
+scalar DateTime
+
+type Query {
+    posts(page: Int = 0, limit: Int = 10, search: String, sortBy: String = "createdAt", sortDir: String = "DESC"): PostPage!
+    post(id: ID!): Post
+    users(page: Int = 0, limit: Int = 10, search: String, sortBy: String = "createdAt", sortDir: String = "DESC"): UserPage!
+    user(id: ID!): User
+    usersWithPosts: [User!]!
+}
+
+type Post {
+    id: ID!
+    title: String!
+    content: String
+    createdAt: DateTime!
+    author: User!
+}
+
+type User {
+    id: ID!
+    name: String!
+    email: String!
+    createdAt: DateTime!
+    posts(limit: Int = 10): [Post!]!
+}
+
+type PostPage {
+    content: [Post!]!
+    page: Int!
+    size: Int!
+    totalElements: Long!
+    totalPages: Int!
+    first: Boolean!
+    last: Boolean!
+}
+
+type UserPage {
+    content: [User!]!
+    page: Int!
+    size: Int!
+    totalElements: Long!
+    totalPages: Int!
+    first: Boolean!
+    last: Boolean!
+}
+
+scalar Long
