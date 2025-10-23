@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>실시간 채팅</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .chat-container {
+            width: 90%;
+            max-width: 800px;
+            height: 90vh;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            position: relative;
+        }
+
+        .connection-status {
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .connected {
+            background: #4CAF50;
+        }
+
+        .disconnected {
+            background: #f44336;
+        }
+
+        .room-controls {
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .room-controls input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .room-controls button {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        .room-controls button:hover {
+            background: #5a6fd8;
+        }
+
+        .room-controls button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .current-room {
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: flex-start;
+        }
+
+        .message.own {
+            justify-content: flex-end;
+        }
+
+        .message.system {
+            justify-content: center;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            word-wrap: break-word;
+            position: relative;
+        }
+
+        .message.own .message-content {
+            background: #667eea;
+            color: white;
+            border-bottom-right-radius: 5px;
+        }
+
+        .message.other .message-content {
+            background: white;
+            border: 1px solid #e9ecef;
+            border-bottom-left-radius: 5px;
+        }
+
+        .message.system .message-content {
+            background: #6c757d;
+            color: white;
+            font-style: italic;
+            font-size: 14px;
+            max-width: 80%;
+        }
+
+        .message-sender {
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 4px;
+            color: #666;
+        }
+
+        .message.own .message-sender {
+            color: #ccc;
+        }
+
+        .message-time {
+            font-size: 11px;
+            color: #999;
+            margin-top: 4px;
+        }
+
+        .input-container {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            gap: 10px;
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 25px;
+            font-size: 14px;
+            resize: none;
+            max-height: 100px;
+            min-height: 44px;
+        }
+
+        .message-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .send-button {
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        .send-button:hover:not(:disabled) {
+            background: #5a6fd8;
+        }
+
+        .send-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .typing-indicator {
+            padding: 10px 20px;
+            font-style: italic;
+            color: #666;
+            font-size: 12px;
+        }
+
+        @media (max-width: 600px) {
+            .chat-container {
+                width: 100%;
+                height: 100vh;
+                border-radius: 0;
+            }
+            
+            .message-content {
+                max-width: 85%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>실시간 채팅</h1>
+            <div class="connection-status disconnected" id="connectionStatus">연결 끊김</div>
+            <div id="userInfo"></div>
+        </div>
+
+        <div class="room-controls">
+            <input type="text" id="roomInput" placeholder="방 이름을 입력하세요" maxlength="50">
+            <button id="joinButton" disabled>입장</button>
+            <button id="leaveButton" disabled>퇴장</button>
+            <span class="current-room" id="currentRoom">방에 입장하지 않음</span>
+        </div>
+
+        <div class="messages-container" id="messagesContainer">
+            <div class="message system">
+                <div class="message-content">
+                    서버에 연결 중...
+                </div>
+            </div>
+        </div>
+
+        <div class="input-container">
+            <textarea id="messageInput" class="message-input" placeholder="메시지를 입력하세요... (Enter: 전송, Shift+Enter: 줄바꿈)" disabled></textarea>
+            <button id="sendButton" class="send-button" disabled>전송</button>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        class ChatClient {
+            constructor() {
+                this.socket = null;
+                this.currentRoom = null;
+                this.userId = null;
+                this.nickname = null;
+                this.isConnected = false;
+                this.reconnectAttempts = 0;
+                this.maxReconnectAttempts = 5;
+                this.heartbeatInterval = null;
+                
+                this.initializeElements();
+                this.bindEvents();
+                this.connect();
+            }
+
+            initializeElements() {
+                this.connectionStatus = document.getElementById('connectionStatus');
+                this.userInfo = document.getElementById('userInfo');
+                this.roomInput = document.getElementById('roomInput');
+                this.joinButton = document.getElementById('joinButton');
+                this.leaveButton = document.getElementById('leaveButton');
+                this.currentRoomSpan = document.getElementById('currentRoom');
+                this.messagesContainer = document.getElementById('messagesContainer');
+                this.messageInput = document.getElementById('messageInput');
+                this.sendButton = document.getElementById('sendButton');
+            }
+
+            bindEvents() {
+                this.joinButton.addEventListener('click', () => this.joinRoom());
+                this.leaveButton.addEventListener('click', () => this.leaveRoom());
+                this.sendButton.addEventListener('click', () => this.sendMessage());
+                
+                this.roomInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.joinRoom();
+                    }
+                });
+
+                this.messageInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.sendMessage();
+                    }
+                });
+
+                // 페이지 종료 시 정리
+                window.addEventListener('beforeunload', () => {
+                    if (this.currentRoom) {
+                        this.socket?.emit('leave_room', { roomId: this.currentRoom });
+                    }
+                });
+            }
+
+            connect() {
+                try {
+                    this.socket = io('http://localhost:9092', {
+                        transports: ['websocket', 'polling'],
+                        timeout: 5000,
+                        forceNew: true
+                    });
+
+                    this.socket.on('connect', () => {
+                        console.log('서버에 연결됨');
+                        this.isConnected = true;
+                        this.reconnectAttempts = 0;
+                        this.updateConnectionStatus(true);
+                        this.startHeartbeat();
+                    });
+
+                    this.socket.on('disconnect', () => {
+                        console.log('서버 연결 끊김');
+                        this.isConnected = false;
+                        this.updateConnectionStatus(false);
+                        this.stopHeartbeat();
+                        this.attemptReconnect();
+                    });
+
+                    this.socket.on('connected', (data) => {
+                        this.userId = data.userId;
+                        this.nickname = data.nickname;
+                        this.userInfo.textContent = `${this.nickname} (${this.userId.substring(0, 8)})`;
+                        this.addSystemMessage(data.message);
+                        this.enableControls();
+                    });
+
+                    this.socket.on('message', (message) => {
+                        this.displayMessage(message);
+                    });
+
+                    this.socket.on('room_history', (messages) => {
+                        this.clearMessages();
+                        messages.forEach(message => this.displayMessage(message));
+                    });
+
+                    this.socket.on('joined_room', (data) => {
+                        this.currentRoom = data.roomId;
+                        this.updateRoomStatus();
+                        this.addSystemMessage(data.message);
+                    });
+
+                    this.socket.on('left_room', (data) => {
+                        this.currentRoom = null;
+                        this.updateRoomStatus();
+                        this.addSystemMessage(data.message);
+                    });
+
+                    this.socket.on('pong', () => {
+                        console.log('Heartbeat received');
+                    });
+
+                    this.socket.on('connect_error', (error) => {
+                        console.error('연결 오류:', error);
+                        this.updateConnectionStatus(false);
+                        this.attemptReconnect();
+                    });
+
+                } catch (error) {
+                    console.error('Socket 초기화 오류:', error);
+                    this.updateConnectionStatus(false);
+                }
+            }
+
+            attemptReconnect() {
+                if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                    this.reconnectAttempts++;
+                    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
+                    
+                    this.addSystemMessage(`재연결 시도 중... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+                    
+                    setTimeout(() => {
+                        if (!this.isConnected) {
+                            this.connect();
+                        }
+                    }, delay);
+                } else {
+                    this.addSystemMessage('재연결 실패. 페이지를 새로고침해 주세요.');
+                }
+            }
+
+            startHeartbeat() {
+                this.heartbeatInterval = setInterval(() => {
+                    if (this.socket && this.isConnected) {
+                        this.socket.emit('ping', 'ping');
+                    }
+                }, 25000);
+            }
+
+            stopHeartbeat() {
+                if (this.heartbeatInterval) {
+                    clearInterval(this.heartbeatInterval);
+                    this.heartbeatInterval = null;
+                }
+            }
+
+            updateConnectionStatus(connected) {
+                if (connected) {
+                    this.connectionStatus.textContent = '연결됨';
+                    this.connectionStatus.className = 'connection-status connected';
+                } else {
+                    this.connectionStatus.textContent = '연결 끊김';
+                    this.connectionStatus.className = 'connection-status disconnected';
+                    this.disableControls();
+                }
+            }
+
+            enableControls() {
+                this.joinButton.disabled = false;
+                this.messageInput.disabled = false;
+                this.sendButton.disabled = false;
+            }
+
+            disableControls() {
+                this.joinButton.disabled = true;
+                this.leaveButton.disabled = true;
+                this.messageInput.disabled = true;
+                this.sendButton.disabled = true;
+            }
+
+            updateRoomStatus() {
+                if (this.currentRoom) {
+                    this.currentRoomSpan.textContent = `현재 방: ${this.currentRoom}`;
+                    this.leaveButton.disabled = false;
+                    this.joinButton.disabled = true;
+                } else {
+                    this.currentRoomSpan.textContent = '방에 입장하지 않음';
+                    this.leaveButton.disabled = true;
+                    this.joinButton.disabled = false;
+                }
+            }
+
+            joinRoom() {
+                const roomId = this.roomInput.value.trim();
+                if (!roomId || !this.isConnected) return;
+
+                this.socket.emit('join_room', { roomId });
+                this.roomInput.value = '';
+            }
+
+            leaveRoom() {
+                if (!this.currentRoom || !this.isConnected) return;
+                this.socket.emit('leave_room', { roomId: this.currentRoom });
+            }
+
+            sendMessage() {
+                const text = this.messageInput.value.trim();
+                if (!text || !this.currentRoom || !this.isConnected) return;
+
+                this.socket.emit('send_message', { text });
+                this.messageInput.value = '';
+            }
+
+            displayMessage(message) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message';
+
+                if (message.type === 'SYSTEM') {
+                    messageDiv.classList.add('system');
+                } else if (message.sender === this.nickname) {
+                    messageDiv.classList.add('own');
+                } else {
+                    messageDiv.classList.add('other');
+                }
+
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'message-content';
+
+                if (message.type !== 'SYSTEM') {
+                    const senderDiv = document.createElement('div');
+                    senderDiv.className = 'message-sender';
+                    senderDiv.textContent = message.sender;
+                    contentDiv.appendChild(senderDiv);
+                }
+
+                const textDiv = document.createElement('div');
+                textDiv.textContent = message.text;
+                contentDiv.appendChild(textDiv);
+
+                const timeDiv = document.createElement('div');
+                timeDiv.className = 'message-time';
+                timeDiv.textContent = new Date(message.timestamp).toLocaleTimeString();
+                contentDiv.appendChild(timeDiv);
+
+                messageDiv.appendChild(contentDiv);
+                this.messagesContainer.appendChild(messageDiv);
+                this.scrollToBottom();
+            }
+
+            addSystemMessage(text) {
+                const message = {
+                    type: 'SYSTEM',
+                    text: text,
+                    timestamp: new Date().toISOString()
+                };
+                this.displayMessage(message);
+            }
+
+            clearMessages() {
+                this.messagesContainer.innerHTML = '';
+            }
+
+            scrollToBottom() {
+                this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+            }
+        }
+
+        // 페이지 로드 시 채팅 클라이언트 초기화
+        document.addEventListener('DOMContentLoaded', () => {
+            new ChatClient();
+        });
+    </script>
+</body>
+</html>
